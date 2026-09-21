@@ -11,7 +11,7 @@
 SetWorkingDir(A_ScriptDir)
 Persistent()
 
-#Include lib\Config.ahk
+#Include lib\AppConfig.ahk
 #Include lib\Overlay.ahk
 #Include lib\SettingsGui.ahk
 #Include lib\ModuleManager.ahk
@@ -20,7 +20,7 @@ Persistent()
 global APP_NAME    := "MyUI"
 global APP_VERSION := "0.1.0"
 
-global Cfg     := Config(A_ScriptDir "\data\settings.ini")
+global Cfg     := AppConfig(A_ScriptDir "\data\settings.ini")
 global Overlay := OverlayWindow()
 global Modules := ModuleManager()
 
@@ -64,6 +64,7 @@ BuildTray() {
 }
 
 OnExit(SaveOnExit)
+global Cfg
 SaveOnExit(*) {
     Cfg.Flush()
 }

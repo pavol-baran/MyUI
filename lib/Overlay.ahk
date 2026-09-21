@@ -19,21 +19,22 @@ class OverlayWindow {
     static KEY_COLOR := "0F0F0E"   ; used as the transparent key
 
     __New() {
+        global Cfg
         this.visible := false
         this.order   := []          ; line ids, in display order
         this.lines   := Map()       ; id -> text string
         this.ctrls   := []          ; pooled text controls
 
-        this.x     := Integer(Cfg.Get("Overlay", "X", "40"))
-        this.y     := Integer(Cfg.Get("Overlay", "Y", "40"))
-        this.size  := Integer(Cfg.Get("Overlay", "FontSize", "11"))
+        this.x     := Cfg.GetInt("Overlay", "X", 40)
+        this.y     := Cfg.GetInt("Overlay", "Y", 40)
+        this.size  := Cfg.GetInt("Overlay", "FontSize", 11)
         this.color := Cfg.Get("Overlay", "FontColor", "FFFFFF")
 
         this.Build()
     }
 
     Build() {
-        this.gui := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x20 +E0x80000 -DPIScale +Owner")
+        this.gui := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x20 +E0x80000 -DPIScale")
         this.gui.BackColor := OverlayWindow.KEY_COLOR
         this.gui.MarginX := 0
         this.gui.MarginY := 0
@@ -49,7 +50,8 @@ class OverlayWindow {
             this.ctrls.Push(c)
         }
 
-        ; show once off-screen so handles exist, then key out the background
+        ; realise the window off-screen so handles exist, then key
+        ; out the background colour, then hide it again
         this.gui.Show("x-10000 y-10000 NoActivate AutoSize")
         WinSetTransColor(OverlayWindow.KEY_COLOR, this.gui)
         this.gui.Hide()
@@ -107,6 +109,7 @@ class OverlayWindow {
     }
 
     Move(x, y) {
+        global Cfg
         this.x := x, this.y := y
         Cfg.Set("Overlay", "X", x)
         Cfg.Set("Overlay", "Y", y)
@@ -125,6 +128,9 @@ class OverlayWindow {
     }
 
     Toggle() {
-        this.visible ? this.Hide() : this.Show()
+        if this.visible
+            this.Hide()
+        else
+            this.Show()
     }
 }

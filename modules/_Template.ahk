@@ -13,6 +13,7 @@ class TemplateModule {
 
     __New() {
         this.active := false
+        this.timer  := ""
     }
 
     ; runs once at startup - set up state, load assets
@@ -33,12 +34,13 @@ class TemplateModule {
         if !this.active
             return
         this.active := false
-        SetTimer(this.timer, 0)
+        if this.timer
+            SetTimer(this.timer, 0)
         Overlay.ClearLine(this.Name)
     }
 
     Tick() {
         ; example: write one line to the overlay
-        ; Overlay.SetLine(this.Name, "hello " A_Now)
+        ; Overlay.SetLine(this.Name, "hello " A_TickCount)
     }
 }

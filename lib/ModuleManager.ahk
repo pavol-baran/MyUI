@@ -22,6 +22,7 @@ class ModuleManager {
     }
 
     InitAll() {
+        global Cfg
         for name, mod in this.items {
             try {
                 mod.Init()
@@ -34,14 +35,19 @@ class ModuleManager {
     }
 
     SetEnabled(name, on) {
+        global Cfg
         if !this.items.Has(name)
             return
         mod := this.items[name]
-        on ? mod.Enable() : mod.Disable()
+        if on
+            mod.Enable()
+        else
+            mod.Disable()
         Cfg.Set("Modules", name, on ? "1" : "0")
     }
 
     IsEnabled(name) {
+        global Cfg
         return Cfg.Get("Modules", name, "1") = "1"
     }
 

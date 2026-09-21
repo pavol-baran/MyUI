@@ -18,7 +18,7 @@ AutoHotkey **v2.0** (2.0.28 or newer). Run `MyUI.ahk`.
 ```
 MyUI.ahk            entry point — include + register modules here
 lib/
-  Config.ahk        INI wrapper, cached
+  AppConfig.ahk     INI wrapper, cached
   Overlay.ahk       transparent click-through text overlay
   SettingsGui.ahk   tabbed settings window
   ModuleManager.ahk module lifecycle
@@ -34,6 +34,14 @@ img/                templates/assets later
 2. In `MyUI.ahk`: `#Include modules\Thing.ahk` then `Modules.Register(ThingModule())`
    — both above the `Modules.InitAll()` line.
 3. It appears in **Settings → Modules** with an on/off toggle that persists.
+
+## Notes on two fixed gotchas
+- The config class is `AppConfig`, **not** `Config`. `Config` collides with an
+  existing symbol in the VS Code AHK definitions and the language server
+  rejects the constructor call with *"Expected 0 parameters, but got 1"*.
+- `Integer(...)` is avoided throughout. The language server reports it as an
+  unassigned variable under `#Warn All`. Unary `+` (`val + 0`) coerces
+  strings to numbers instead — see `AppConfig.GetInt()`.
 
 ## Overlay notes
 - Click-through via `WS_EX_TRANSPARENT` (`+E0x20`) + layered (`+E0x80000`),

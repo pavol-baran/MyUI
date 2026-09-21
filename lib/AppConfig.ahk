@@ -1,14 +1,18 @@
 ; ============================================================
-;  Config - thin INI wrapper with an in-memory cache.
+;  AppConfig - thin INI wrapper with an in-memory cache.
 ;  Usage:  Cfg.Get("Section","Key","default")
 ;          Cfg.Set("Section","Key", value)
+;          Cfg.GetInt("Section","Key", 0)
+;
+;  Named AppConfig rather than Config: "Config" collides with
+;  an existing symbol in the VS Code definitions and makes the
+;  language server reject the constructor call.
 ; ============================================================
 
-class Config {
-    __New(path) {
-        this.path  := path
+class AppConfig {
+    __New(path := "") {
+        this.path  := path ? path : A_ScriptDir "\data\settings.ini"
         this.cache := Map()
-        this.dirty := false
         this.EnsureFile()
     }
 
@@ -24,7 +28,6 @@ class Config {
             this.Set("Overlay", "Y", "40")
             this.Set("Overlay", "FontSize", "11")
             this.Set("Overlay", "FontColor", "FFFFFF")
-            this.Flush()
         }
     }
 
@@ -37,13 +40,20 @@ class Config {
         return val
     }
 
+    ; Numeric read. INI values are always strings, so unary +
+    ; is used to coerce - avoids Integer() which the language
+    ; server flags as an unassigned variable.
+    GetInt(section, key, default := 0) {
+        val := this.Get(section, key, default)
+        return IsNumber(val) ? val + 0 : default
+    }
+
     Set(section, key, value) {
         this.cache[section "|" key] := value
         IniWrite(value, this.path, section, key)
-        this.dirty := false   ; IniWrite is immediate; kept for future batching
     }
 
     Flush() {
-        ; placeholder - writes are immediate today, batched later if needed
+        ; writes are immediate today; hook kept for future batching
     }
 }

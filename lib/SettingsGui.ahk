@@ -18,6 +18,7 @@ class SettingsGui {
     }
 
     static Build() {
+        global Cfg, Overlay, Modules, APP_NAME, APP_VERSION
         g := Gui("+Resize -MaximizeBox", APP_NAME " - Settings")
         g.SetFont("s9", "Segoe UI")
         g.OnEvent("Close", (*) => g.Hide())
@@ -53,14 +54,10 @@ class SettingsGui {
         SettingsGui.ctl["eS"] := eS, SettingsGui.ctl["eC"] := eC
 
         bApply := g.AddButton("x28 y182 w110 h26", "Apply position")
-        bApply.OnEvent("Click", (*) => Overlay.Move(Integer(eX.Value), Integer(eY.Value)))
+        bApply.OnEvent("Click", (*) => SettingsGui.ApplyPosition())
 
         bFont := g.AddButton("x148 y182 w130 h26", "Apply font (reload)")
-        bFont.OnEvent("Click", (*) => (
-            Cfg.Set("Overlay", "FontSize", eS.Value),
-            Cfg.Set("Overlay", "FontColor", eC.Value),
-            Reload()
-        ))
+        bFont.OnEvent("Click", (*) => SettingsGui.ApplyFont())
 
         g.AddText("x28 y220 w340 cGray",
             "Font changes rebuild the overlay, so the script reloads.")
@@ -86,6 +83,22 @@ class SettingsGui {
         g.AddButton("x310 y320 w100 h28", "Close").OnEvent("Click", (*) => g.Hide())
 
         SettingsGui.win := g
+    }
+
+    static ApplyPosition() {
+        global Overlay
+        x := SettingsGui.ctl["eX"].Value
+        y := SettingsGui.ctl["eY"].Value
+        ; Edit controls with the Number style still yield strings;
+        ; unary + coerces without needing Integer()
+        Overlay.Move(x + 0, y + 0)
+    }
+
+    static ApplyFont() {
+        global Cfg
+        Cfg.Set("Overlay", "FontSize",  SettingsGui.ctl["eS"].Value)
+        Cfg.Set("Overlay", "FontColor", SettingsGui.ctl["eC"].Value)
+        Reload()
     }
 
     ; separate factory so each checkbox closes over its own name
