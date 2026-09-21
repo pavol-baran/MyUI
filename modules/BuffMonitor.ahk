@@ -13,7 +13,7 @@ class BuffMonitorModule {
         this.timer := ""
 
         this.sidecarDir := A_ScriptDir "\sidecars\BuffMonitor"
-        this.scriptPath := this.sidecarDir "\poe_buff_overlay_v1.5.py"
+        this.scriptPath := this.sidecarDir "\poe_buff_overlay_v1.6.2.py"
         this.logPath := this.sidecarDir "\buff_monitor.log"
 
         global Cfg
@@ -146,6 +146,31 @@ class BuffMonitorModule {
 
             this.Tick()
         }
+    }
+
+    Restart() {
+        if !this.active
+            return
+
+        OutputDebug(
+            "[MyUI] Restarting Buff Monitor`n"
+        )
+
+        this.StopPython()
+
+        this.failedStarts := 0
+        this.lastStartTick := 0
+
+        this.Tick()
+    }
+
+    ApplySettings(settings) {
+        global Cfg
+
+        for key, value in settings
+            Cfg.Set("BuffMonitor", key, value)
+
+        this.Restart()
     }
 
     StartPython() {

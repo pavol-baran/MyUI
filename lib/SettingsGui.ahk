@@ -14,7 +14,7 @@ class SettingsGui {
             return
         }
         SettingsGui.Build()
-        SettingsGui.win.Show("w420 h360")
+        SettingsGui.win.Show("w520 h500")
     }
 
     static Build() {
@@ -24,7 +24,15 @@ class SettingsGui {
         g.OnEvent("Close", (*) => g.Hide())
         g.OnEvent("Escape", (*) => g.Hide())
 
-        tabs := g.AddTab3("x10 y10 w400 h300", ["General", "Overlay", "Modules"])
+        tabs := g.AddTab3(
+            "x10 y10 w500 h440",
+            [
+                "General",
+                "Overlay",
+                "Modules",
+                "Buff Monitor"
+            ]
+        )
         SettingsGui.ctl["tabs"] := tabs
 
         ; ---------------- General ----------------
@@ -97,9 +105,154 @@ class SettingsGui {
                 }
             }
         }
+        ; ---------------- Buff Monitor ----------------
 
+        tabs.UseTab("Buff Monitor")
+
+        buffModule := Modules.Get("Buff Monitor")
+
+        g.AddText("x28 y50 w115", "Overlay X")
+        eBuffX := g.AddEdit(
+            "x150 y46 w90 Number",
+            Cfg.Get("BuffMonitor", "OverlayX", "1650")
+        )
+
+        g.AddText("x270 y50 w90", "Overlay Y")
+        eBuffY := g.AddEdit(
+            "x360 y46 w90 Number",
+            Cfg.Get("BuffMonitor", "OverlayY", "760")
+        )
+
+        g.AddText("x28 y84 w115", "Scale")
+        eBuffScale := g.AddEdit(
+            "x150 y80 w90",
+            Cfg.Get("BuffMonitor", "Scale", "1.25")
+        )
+
+        g.AddText("x270 y84 w90", "Timer area")
+        eBuffExtra := g.AddEdit(
+            "x360 y80 w90 Number",
+            Cfg.Get("BuffMonitor", "ExtraBelowIcon", "28")
+        )
+
+        g.AddText("x28 y118 w115", "Detection, ms")
+        eBuffDetection := g.AddEdit(
+            "x150 y114 w90 Number",
+            Cfg.Get(
+                "BuffMonitor",
+                "DetectionIntervalMs",
+                "200"
+            )
+        )
+
+        g.AddText("x270 y118 w90", "Display, ms")
+        eBuffDisplay := g.AddEdit(
+            "x360 y114 w90 Number",
+            Cfg.Get(
+                "BuffMonitor",
+                "DisplayIntervalMs",
+                "50"
+            )
+        )
+
+        g.AddText("x28 y152 w115", "Misses before gone")
+        eBuffMisses := g.AddEdit(
+            "x150 y148 w90 Number",
+            Cfg.Get("BuffMonitor", "MissesBeforeGone", "2")
+        )
+
+        g.AddText("x28 y186 w115", "Rend threshold")
+        eBuffRendThreshold := g.AddEdit(
+            "x150 y182 w90",
+            Cfg.Get("BuffMonitor", "RendThreshold", "0.72")
+        )
+
+        g.AddText("x270 y186 w90", "Charge threshold")
+        eBuffChargeThreshold := g.AddEdit(
+            "x360 y182 w90",
+            Cfg.Get(
+                "BuffMonitor",
+                "PowerChargeThreshold",
+                "0.72"
+            )
+        )
+
+        cbBuffPlus := g.AddCheckbox(
+            "x28 y224 w300",
+            "Show green + when Power Charge is available"
+        )
+
+        cbBuffPlus.Value :=
+            Cfg.Get(
+                "BuffMonitor",
+                "ShowPowerChargePlus",
+                "1"
+            ) = "1"
+
+        cbBuffActiveOnly := g.AddCheckbox(
+            "x28 y252 w300",
+            "Show only while Path of Exile 2 is active"
+        )
+
+        cbBuffActiveOnly.Value :=
+            Cfg.Get(
+                "BuffMonitor",
+                "ShowOnlyWhenPoeActive",
+                "1"
+            ) = "1"
+
+        cbBuffDebugTab := g.AddCheckbox(
+            "x28 y280 w300",
+            "Debug mode: show Python console"
+        )
+
+        cbBuffDebugTab.Value := buffModule.debugMode
+
+        SettingsGui.ctl["eBuffX"] := eBuffX
+        SettingsGui.ctl["eBuffY"] := eBuffY
+        SettingsGui.ctl["eBuffScale"] := eBuffScale
+        SettingsGui.ctl["eBuffExtra"] := eBuffExtra
+        SettingsGui.ctl["eBuffDetection"] := eBuffDetection
+        SettingsGui.ctl["eBuffDisplay"] := eBuffDisplay
+        SettingsGui.ctl["eBuffMisses"] := eBuffMisses
+
+        SettingsGui.ctl[
+            "eBuffRendThreshold"
+            ] := eBuffRendThreshold
+
+        SettingsGui.ctl[
+            "eBuffChargeThreshold"
+            ] := eBuffChargeThreshold
+
+        SettingsGui.ctl["cbBuffPlus"] := cbBuffPlus
+        SettingsGui.ctl[
+            "cbBuffActiveOnly"
+            ] := cbBuffActiveOnly
+
+        SettingsGui.ctl[
+            "cbBuffDebugTab"
+            ] := cbBuffDebugTab
+
+        bBuffApply := g.AddButton(
+            "x28 y324 w150 h30 Default",
+            "Apply and Restart"
+        )
+
+        bBuffApply.OnEvent(
+            "Click",
+            (*) => SettingsGui.ApplyBuffMonitor()
+        )
+
+        g.AddText(
+            "x28 y368 w430 cGray",
+            "Changes are saved to settings.ini and the Buff Monitor "
+            . "sidecar is restarted."
+        )
         tabs.UseTab()
-        g.AddButton("x310 y320 w100 h28", "Close").OnEvent("Click", (*) => g.Hide())
+        g.AddButton(
+            "x400 y460 w100 h28",
+            "Close"
+        )
 
         SettingsGui.win := g
     }
@@ -118,6 +271,88 @@ class SettingsGui {
         Cfg.Set("Overlay", "FontSize", SettingsGui.ctl["eS"].Value)
         Cfg.Set("Overlay", "FontColor", SettingsGui.ctl["eC"].Value)
         Reload()
+    }
+
+    static ApplyBuffMonitor() {
+        global Modules
+
+        c := SettingsGui.ctl
+
+        scale := Trim(c["eBuffScale"].Value)
+        rendThreshold := Trim(
+            c["eBuffRendThreshold"].Value
+        )
+        chargeThreshold := Trim(
+            c["eBuffChargeThreshold"].Value
+        )
+
+        if !IsNumber(scale) || scale < 0.25 || scale > 5 {
+            MsgBox(
+                "Scale must be between 0.25 and 5.0.",
+                "Buff Monitor",
+                "Icon!"
+            )
+            return
+        }
+
+        if (
+            !IsNumber(rendThreshold)
+            || rendThreshold < 0
+            || rendThreshold > 1
+        ) {
+            MsgBox(
+                "Rend threshold must be between 0 and 1.",
+                "Buff Monitor",
+                "Icon!"
+            )
+            return
+        }
+
+        if (
+            !IsNumber(chargeThreshold)
+            || chargeThreshold < 0
+            || chargeThreshold > 1
+        ) {
+            MsgBox(
+                "Power Charge threshold must be between 0 and 1.",
+                "Buff Monitor",
+                "Icon!"
+            )
+            return
+        }
+
+        settings := Map(
+            "OverlayX",
+            c["eBuffX"].Value + 0,
+            "OverlayY",
+            c["eBuffY"].Value + 0,
+            "Scale",
+            scale,
+            "DetectionIntervalMs",
+            c["eBuffDetection"].Value + 0,
+            "DisplayIntervalMs",
+            c["eBuffDisplay"].Value + 0,
+            "ExtraBelowIcon",
+            c["eBuffExtra"].Value + 0,
+            "MissesBeforeGone",
+            c["eBuffMisses"].Value + 0,
+            "RendThreshold",
+            rendThreshold,
+            "PowerChargeThreshold",
+            chargeThreshold,
+            "ShowPowerChargePlus",
+            c["cbBuffPlus"].Value ? "1" : "0",
+            "ShowOnlyWhenPoeActive",
+            c["cbBuffActiveOnly"].Value ? "1" : "0"
+        )
+
+        buffModule := Modules.Get("Buff Monitor")
+
+        buffModule.SetDebugMode(
+            c["cbBuffDebugTab"].Value
+        )
+
+        buffModule.ApplySettings(settings)
     }
 
     ; separate factory so each checkbox closes over its own name
