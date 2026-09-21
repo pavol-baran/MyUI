@@ -76,6 +76,25 @@ class SettingsGui {
                 cb.Value := Modules.IsEnabled(name)
                 cb.OnEvent("Click", SettingsGui.MakeToggle(name))
                 y += 26
+
+                if (name = "Buff Monitor") {
+                    buffModule := Modules.Get("Buff Monitor")
+
+                    cbDebug := g.AddCheckbox(
+                        "x48 y" y " w320",
+                        "Debug mode - show Python console"
+                    )
+
+                    cbDebug.Value := buffModule.debugMode
+
+                    cbDebug.OnEvent(
+                        "Click",
+                        (c, *) => buffModule.SetDebugMode(c.Value)
+                    )
+
+                    SettingsGui.ctl["cbBuffDebug"] := cbDebug
+                    y += 30
+                }
             }
         }
 
@@ -96,7 +115,7 @@ class SettingsGui {
 
     static ApplyFont() {
         global Cfg
-        Cfg.Set("Overlay", "FontSize",  SettingsGui.ctl["eS"].Value)
+        Cfg.Set("Overlay", "FontSize", SettingsGui.ctl["eS"].Value)
         Cfg.Set("Overlay", "FontColor", SettingsGui.ctl["eC"].Value)
         Reload()
     }

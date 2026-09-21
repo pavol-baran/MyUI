@@ -15,6 +15,7 @@ Persistent()
 #Include lib\Overlay.ahk
 #Include lib\SettingsGui.ahk
 #Include lib\ModuleManager.ahk
+#Include modules\BuffMonitor.ahk
 
 ; --- global singletons -------------------------------------
 global APP_NAME    := "MyUI"
@@ -31,6 +32,7 @@ global Modules := ModuleManager()
 ;   #Include modules\Buffs.ahk
 ;   Modules.Register(BuffsModule())
 
+Modules.Register(BuffMonitorModule())
 Modules.InitAll()
 
 ; --- tray --------------------------------------------------
@@ -64,7 +66,10 @@ BuildTray() {
 }
 
 OnExit(SaveOnExit)
-global Cfg
+
 SaveOnExit(*) {
+    global Cfg, Modules
+
+    Modules.ShutdownAll()
     Cfg.Flush()
 }

@@ -1,0 +1,22 @@
+{
+  "search_roi": [
+    0,
+    0,
+    2037,
+    118
+  ],
+  "thresholds": {
+    "rend": 0.72,
+    "power_charge": 0.72
+  },
+  "templates": {
+    "rend": {
+      "file": "template_rend.png"
+    },
+    "power_charge": {
+      "file": "template_power_charge.png"
+    }
+  },
+  "misses_before_gone": 2,
+  "poll_interval_seconds": 0.5
+}

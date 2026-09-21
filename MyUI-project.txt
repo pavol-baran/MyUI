@@ -1,0 +1,561 @@
+﻿
+===== FILE: MyUI.ahk =====
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+#Warn All, OutputDebug
+
+; ============================================================
+;  MyUI - entry point
+;  Loads config, libs and modules, then idles.
+;  Add new features as files in /modules, register them below.
+; ============================================================
+
+SetWorkingDir(A_ScriptDir)
+Persistent()
+
+#Include lib\AppConfig.ahk
+#Include lib\Overlay.ahk
+#Include lib\SettingsGui.ahk
+#Include lib\ModuleManager.ahk
+
+; --- global singletons -------------------------------------
+global APP_NAME    := "MyUI"
+global APP_VERSION := "0.1.0"
+
+global Cfg     := AppConfig(A_ScriptDir "\data\settings.ini")
+global Overlay := OverlayWindow()
+global Modules := ModuleManager()
+
+; --- module registration -----------------------------------
+; When you add a module, #Include it and register it here.
+; Nothing registered yet - that is intentional for step 1.
+;
+;   #Include modules\Buffs.ahk
+;   Modules.Register(BuffsModule())
+
+Modules.InitAll()
+
+; --- tray --------------------------------------------------
+BuildTray()
+
+; --- hotkeys -----------------------------------------------
+Hotkey("F1", (*) => Overlay.Toggle())
+Hotkey("F2", (*) => SettingsGui.Show())
+Hotkey("^!r", (*) => Reload())
+Hotkey("^!q", (*) => ExitApp())
+
+; --- startup -----------------------------------------------
+if (Cfg.Get("General", "ShowOverlayOnStart", "1") = "1")
+    Overlay.Show()
+
+Overlay.SetLine("status", APP_NAME " v" APP_VERSION " - F1 overlay | F2 settings")
+
+TrayTip(APP_NAME " running", "F1 = overlay  F2 = settings  Ctrl+Alt+Q = quit")
+
+; ============================================================
+BuildTray() {
+    T := A_TrayMenu
+    T.Delete()
+    T.Add("Settings`tF2", (*) => SettingsGui.Show())
+    T.Add("Toggle overlay`tF1", (*) => Overlay.Toggle())
+    T.Add()
+    T.Add("Reload`tCtrl+Alt+R", (*) => Reload())
+    T.Add("Exit`tCtrl+Alt+Q", (*) => ExitApp())
+    T.Default := "Settings`tF2"
+    A_IconTip := APP_NAME " v" APP_VERSION
+}
+
+OnExit(SaveOnExit)
+global Cfg
+SaveOnExit(*) {
+    Cfg.Flush()
+}
+
+===== FILE: README.md =====
+# MyUI â€” step 1 skeleton
+
+Bare AHK v2 app: starts, sits in tray, shows a transparent click-through
+overlay, and has an empty-but-working settings window. No features yet.
+
+## Requires
+AutoHotkey **v2.0** (2.0.28 or newer). Run `MyUI.ahk`.
+
+## Hotkeys
+| Key | Action |
+|---|---|
+| `F1` | Toggle overlay |
+| `F2` | Settings |
+| `Ctrl+Alt+R` | Reload |
+| `Ctrl+Alt+Q` | Exit |
+
+## Layout
+```
+MyUI.ahk            entry point â€” include + register modules here
+lib/
+  AppConfig.ahk     INI wrapper, cached
+  Overlay.ahk       transparent click-through text overlay
+  SettingsGui.ahk   tabbed settings window
+  ModuleManager.ahk module lifecycle
+modules/
+  _Template.ahk     copy this to start a feature
+data/
+  settings.ini      auto-created on first run
+img/                templates/assets later
+```
+
+## Adding a feature
+1. Copy `modules/_Template.ahk`, rename the class and `Name`.
+2. In `MyUI.ahk`: `#Include modules\Thing.ahk` then `Modules.Register(ThingModule())`
+   â€” both above the `Modules.InitAll()` line.
+3. It appears in **Settings â†’ Modules** with an on/off toggle that persists.
+
+## Notes on two fixed gotchas
+- The config class is `AppConfig`, **not** `Config`. `Config` collides with an
+  existing symbol in the VS Code AHK definitions and the language server
+  rejects the constructor call with *"Expected 0 parameters, but got 1"*.
+- `Integer(...)` is avoided throughout. The language server reports it as an
+  unassigned variable under `#Warn All`. Unary `+` (`val + 0`) coerces
+  strings to numbers instead â€” see `AppConfig.GetInt()`.
+
+## Overlay notes
+- Click-through via `WS_EX_TRANSPARENT` (`+E0x20`) + layered (`+E0x80000`),
+  background keyed out with `WinSetTransColor`.
+- Uses a fixed pool of 12 text controls rather than rebuilding the GUI, so
+  frequent updates stay cheap. Raise `MAX_LINES` if you need more.
+- `-DPIScale` is set, so coordinates are literal pixels.
+- Call `Overlay.SetLine("id", "text")` / `Overlay.ClearLine("id")`. Each caller
+  owns its own id, so modules can't clobber each other.
+
+## Next steps
+- Attach overlay to a target window instead of screen coords.
+- Drag-to-position mode (temporarily drop `+E0x20` while dragging).
+- Python sidecar launch/teardown in `ModuleManager`.
+
+===== FILE: data\settings.ini =====
+
+[General]
+ShowOverlayOnStart=1
+[Overlay]
+X=400
+Y=40
+FontSize=11
+FontColor=FFFFFF
+
+===== FILE: lib\AppConfig.ahk =====
+; ============================================================
+;  AppConfig - thin INI wrapper with an in-memory cache.
+;  Usage:  Cfg.Get("Section","Key","default")
+;          Cfg.Set("Section","Key", value)
+;          Cfg.GetInt("Section","Key", 0)
+;
+;  Named AppConfig rather than Config: "Config" collides with
+;  an existing symbol in the VS Code definitions and makes the
+;  language server reject the constructor call.
+; ============================================================
+
+class AppConfig {
+    __New(path := "") {
+        this.path  := path ? path : A_ScriptDir "\data\settings.ini"
+        this.cache := Map()
+        this.EnsureFile()
+    }
+
+    EnsureFile() {
+        dir := RegExReplace(this.path, "\\[^\\]+$")
+        if !DirExist(dir)
+            DirCreate(dir)
+        if !FileExist(this.path) {
+            FileAppend("", this.path, "UTF-8")
+            ; seed defaults
+            this.Set("General", "ShowOverlayOnStart", "1")
+            this.Set("Overlay", "X", "40")
+            this.Set("Overlay", "Y", "40")
+            this.Set("Overlay", "FontSize", "11")
+            this.Set("Overlay", "FontColor", "FFFFFF")
+        }
+    }
+
+    Get(section, key, default := "") {
+        id := section "|" key
+        if this.cache.Has(id)
+            return this.cache[id]
+        val := IniRead(this.path, section, key, default)
+        this.cache[id] := val
+        return val
+    }
+
+    ; Numeric read. INI values are always strings, so unary +
+    ; is used to coerce - avoids Integer() which the language
+    ; server flags as an unassigned variable.
+    GetInt(section, key, default := 0) {
+        val := this.Get(section, key, default)
+        return IsNumber(val) ? val + 0 : default
+    }
+
+    Set(section, key, value) {
+        this.cache[section "|" key] := value
+        IniWrite(value, this.path, section, key)
+    }
+
+    Flush() {
+        ; writes are immediate today; hook kept for future batching
+    }
+}
+
+===== FILE: lib\ModuleManager.ahk =====
+; ============================================================
+;  ModuleManager
+;  Holds registered feature modules and drives their lifecycle.
+;
+;  A module is any object exposing:
+;     Name      (string property)
+;     Init()    called once at startup
+;     Enable()  called when switched on
+;     Disable() called when switched off
+;
+;  See modules\_Template.ahk for a copy-paste starting point.
+; ============================================================
+
+class ModuleManager {
+    __New() {
+        this.items := Map()      ; name -> module object
+    }
+
+    Register(mod) {
+        this.items[mod.Name] := mod
+        return mod
+    }
+
+    InitAll() {
+        global Cfg
+        for name, mod in this.items {
+            try {
+                mod.Init()
+                if (Cfg.Get("Modules", name, "1") = "1")
+                    mod.Enable()
+            } catch as e {
+                OutputDebug("[MyUI] module '" name "' failed to init: " e.Message)
+            }
+        }
+    }
+
+    SetEnabled(name, on) {
+        global Cfg
+        if !this.items.Has(name)
+            return
+        mod := this.items[name]
+        if on
+            mod.Enable()
+        else
+            mod.Disable()
+        Cfg.Set("Modules", name, on ? "1" : "0")
+    }
+
+    IsEnabled(name) {
+        global Cfg
+        return Cfg.Get("Modules", name, "1") = "1"
+    }
+
+    Names() {
+        out := []
+        for name, _ in this.items
+            out.Push(name)
+        return out
+    }
+}
+
+===== FILE: lib\Overlay.ahk =====
+; ============================================================
+;  OverlayWindow
+;  Transparent, always-on-top, click-through text overlay.
+;
+;  Uses a fixed pool of text controls so updates are cheap -
+;  no GUI teardown/rebuild when content changes (important
+;  once a detector starts pushing updates several times/sec).
+;
+;  API:
+;    .Show() .Hide() .Toggle()
+;    .SetLine(id, text)     create or update a labelled line
+;    .ClearLine(id)         remove a line
+;    .ClearAll()
+;    .Move(x, y)
+; ============================================================
+
+class OverlayWindow {
+    static MAX_LINES := 12
+    static KEY_COLOR := "0F0F0E"   ; used as the transparent key
+
+    __New() {
+        global Cfg
+        this.visible := false
+        this.order   := []          ; line ids, in display order
+        this.lines   := Map()       ; id -> text string
+        this.ctrls   := []          ; pooled text controls
+
+        this.x     := Cfg.GetInt("Overlay", "X", 40)
+        this.y     := Cfg.GetInt("Overlay", "Y", 40)
+        this.size  := Cfg.GetInt("Overlay", "FontSize", 11)
+        this.color := Cfg.Get("Overlay", "FontColor", "FFFFFF")
+
+        this.Build()
+    }
+
+    Build() {
+        this.gui := Gui("-Caption +AlwaysOnTop +ToolWindow +E0x20 +E0x80000 -DPIScale")
+        this.gui.BackColor := OverlayWindow.KEY_COLOR
+        this.gui.MarginX := 0
+        this.gui.MarginY := 0
+        this.gui.SetFont("s" this.size " Bold c" this.color, "Segoe UI")
+
+        lineH := this.size * 2
+        Loop OverlayWindow.MAX_LINES {
+            c := this.gui.AddText(
+                Format("x8 y{1} w520 h{2} BackgroundTrans", 6 + (A_Index - 1) * lineH, lineH),
+                ""
+            )
+            c.Visible := false
+            this.ctrls.Push(c)
+        }
+
+        ; realise the window off-screen so handles exist, then key
+        ; out the background colour, then hide it again
+        this.gui.Show("x-10000 y-10000 NoActivate AutoSize")
+        WinSetTransColor(OverlayWindow.KEY_COLOR, this.gui)
+        this.gui.Hide()
+    }
+
+    ; --- content --------------------------------------------
+    SetLine(id, text) {
+        if !this.lines.Has(id)
+            this.order.Push(id)
+        this.lines[id] := text
+        this.Redraw()
+    }
+
+    ClearLine(id) {
+        if !this.lines.Has(id)
+            return
+        this.lines.Delete(id)
+        for i, v in this.order {
+            if (v = id) {
+                this.order.RemoveAt(i)
+                break
+            }
+        }
+        this.Redraw()
+    }
+
+    ClearAll() {
+        this.lines := Map()
+        this.order := []
+        this.Redraw()
+    }
+
+    Redraw() {
+        i := 0
+        for _, id in this.order {
+            if (++i > OverlayWindow.MAX_LINES)
+                break
+            c := this.ctrls[i]
+            c.Text := this.lines[id]
+            c.Visible := true
+        }
+        ; blank the unused remainder of the pool
+        while (++i <= OverlayWindow.MAX_LINES) {
+            c := this.ctrls[i]
+            c.Text := ""
+            c.Visible := false
+        }
+        if this.visible
+            this.Reposition()
+    }
+
+    ; --- window ---------------------------------------------
+    Reposition() {
+        this.gui.Show(Format("x{1} y{2} NoActivate AutoSize", this.x, this.y))
+    }
+
+    Move(x, y) {
+        global Cfg
+        this.x := x, this.y := y
+        Cfg.Set("Overlay", "X", x)
+        Cfg.Set("Overlay", "Y", y)
+        if this.visible
+            this.Reposition()
+    }
+
+    Show() {
+        this.visible := true
+        this.Reposition()
+    }
+
+    Hide() {
+        this.visible := false
+        this.gui.Hide()
+    }
+
+    Toggle() {
+        if this.visible
+            this.Hide()
+        else
+            this.Show()
+    }
+}
+
+===== FILE: lib\SettingsGui.ahk =====
+; ============================================================
+;  SettingsGui
+;  Single settings window. Tabs are the extension point:
+;  each new feature area gets its own tab section below.
+; ============================================================
+
+class SettingsGui {
+    static win := ""
+    static ctl := Map()
+
+    static Show() {
+        if (SettingsGui.win) {
+            SettingsGui.win.Show()
+            return
+        }
+        SettingsGui.Build()
+        SettingsGui.win.Show("w420 h360")
+    }
+
+    static Build() {
+        global Cfg, Overlay, Modules, APP_NAME, APP_VERSION
+        g := Gui("+Resize -MaximizeBox", APP_NAME " - Settings")
+        g.SetFont("s9", "Segoe UI")
+        g.OnEvent("Close", (*) => g.Hide())
+        g.OnEvent("Escape", (*) => g.Hide())
+
+        tabs := g.AddTab3("x10 y10 w400 h300", ["General", "Overlay", "Modules"])
+        SettingsGui.ctl["tabs"] := tabs
+
+        ; ---------------- General ----------------
+        tabs.UseTab("General")
+        cbStart := g.AddCheckbox("x28 y50 w340", "Show overlay on startup")
+        cbStart.Value := (Cfg.Get("General", "ShowOverlayOnStart", "1") = "1")
+        cbStart.OnEvent("Click", (c, *) =>
+            Cfg.Set("General", "ShowOverlayOnStart", c.Value ? "1" : "0"))
+        SettingsGui.ctl["cbStart"] := cbStart
+
+        g.AddText("x28 y90 w340", "Hotkeys:")
+        g.AddText("x28 y110 w340",
+            "F1`tToggle overlay`nF2`tSettings`nCtrl+Alt+R`tReload`nCtrl+Alt+Q`tExit")
+
+        ; ---------------- Overlay ----------------
+        tabs.UseTab("Overlay")
+        g.AddText("x28 y50 w60", "X")
+        eX := g.AddEdit("x88 y46 w70 Number", Cfg.Get("Overlay", "X", "40"))
+        g.AddText("x28 y82 w60", "Y")
+        eY := g.AddEdit("x88 y78 w70 Number", Cfg.Get("Overlay", "Y", "40"))
+        g.AddText("x28 y114 w60", "Font size")
+        eS := g.AddEdit("x88 y110 w70 Number", Cfg.Get("Overlay", "FontSize", "11"))
+        g.AddText("x28 y146 w60", "Colour")
+        eC := g.AddEdit("x88 y142 w70", Cfg.Get("Overlay", "FontColor", "FFFFFF"))
+
+        SettingsGui.ctl["eX"] := eX, SettingsGui.ctl["eY"] := eY
+        SettingsGui.ctl["eS"] := eS, SettingsGui.ctl["eC"] := eC
+
+        bApply := g.AddButton("x28 y182 w110 h26", "Apply position")
+        bApply.OnEvent("Click", (*) => SettingsGui.ApplyPosition())
+
+        bFont := g.AddButton("x148 y182 w130 h26", "Apply font (reload)")
+        bFont.OnEvent("Click", (*) => SettingsGui.ApplyFont())
+
+        g.AddText("x28 y220 w340 cGray",
+            "Font changes rebuild the overlay, so the script reloads.")
+
+        ; ---------------- Modules ----------------
+        tabs.UseTab("Modules")
+        names := Modules.Names()
+        if (names.Length = 0) {
+            g.AddText("x28 y50 w340 cGray",
+                "No modules registered yet.`n`nAdd a file under \modules, then #Include"
+                . " and register it`nin MyUI.ahk. It will appear here automatically.")
+        } else {
+            y := 50
+            for _, name in names {
+                cb := g.AddCheckbox("x28 y" y " w340", name)
+                cb.Value := Modules.IsEnabled(name)
+                cb.OnEvent("Click", SettingsGui.MakeToggle(name))
+                y += 26
+            }
+        }
+
+        tabs.UseTab()
+        g.AddButton("x310 y320 w100 h28", "Close").OnEvent("Click", (*) => g.Hide())
+
+        SettingsGui.win := g
+    }
+
+    static ApplyPosition() {
+        global Overlay
+        x := SettingsGui.ctl["eX"].Value
+        y := SettingsGui.ctl["eY"].Value
+        ; Edit controls with the Number style still yield strings;
+        ; unary + coerces without needing Integer()
+        Overlay.Move(x + 0, y + 0)
+    }
+
+    static ApplyFont() {
+        global Cfg
+        Cfg.Set("Overlay", "FontSize",  SettingsGui.ctl["eS"].Value)
+        Cfg.Set("Overlay", "FontColor", SettingsGui.ctl["eC"].Value)
+        Reload()
+    }
+
+    ; separate factory so each checkbox closes over its own name
+    static MakeToggle(name) {
+        return (c, *) => Modules.SetEnabled(name, c.Value)
+    }
+}
+
+===== FILE: modules\_Template.ahk =====
+; ============================================================
+;  Module template - copy this file, rename the class, then in
+;  MyUI.ahk add:
+;
+;      #Include modules\MyThing.ahk
+;      Modules.Register(MyThingModule())
+;
+;  It then shows up automatically in Settings > Modules.
+; ============================================================
+
+class TemplateModule {
+    Name := "Template"
+
+    __New() {
+        this.active := false
+        this.timer  := ""
+    }
+
+    ; runs once at startup - set up state, load assets
+    Init() {
+    }
+
+    ; runs when the module is switched on
+    Enable() {
+        if this.active
+            return
+        this.active := true
+        this.timer := ObjBindMethod(this, "Tick")
+        SetTimer(this.timer, 250)
+    }
+
+    ; runs when switched off - undo everything Enable did
+    Disable() {
+        if !this.active
+            return
+        this.active := false
+        if this.timer
+            SetTimer(this.timer, 0)
+        Overlay.ClearLine(this.Name)
+    }
+
+    Tick() {
+        ; example: write one line to the overlay
+        ; Overlay.SetLine(this.Name, "hello " A_TickCount)
+    }
+}

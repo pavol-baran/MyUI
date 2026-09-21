@@ -51,10 +51,29 @@ class ModuleManager {
         return Cfg.Get("Modules", name, "1") = "1"
     }
 
+    Get(name) {
+        if this.items.Has(name)
+            return this.items[name]
+
+        return ""
+    }
+
     Names() {
         out := []
         for name, _ in this.items
             out.Push(name)
         return out
+    }
+
+    ShutdownAll() {
+        for name, mod in this.items {
+            try mod.Disable()
+            catch as e {
+                OutputDebug(
+                    "[MyUI] module '" name
+                    "' failed to shut down: " e.Message
+                )
+            }
+        }
     }
 }
