@@ -18,7 +18,6 @@ class BuffMonitorModule {
 
         global Cfg
 
-        this.pythonDir := "C:\Users\pavol\AppData\Local\Programs\Python\Python312"
         this.debugMode := Cfg.Get("BuffMonitor", "DebugMode", "0") = "1"
         this.UpdatePythonExe()
 
@@ -110,8 +109,9 @@ class BuffMonitorModule {
     }
 
     UpdatePythonExe() {
-        this.pythonExe := this.pythonDir
-            . (this.debugMode ? "\python.exe" : "\pythonw.exe")
+        this.pythonExe := A_ScriptDir
+            . "\.venv\Scripts\"
+            . (this.debugMode ? "python.exe" : "pythonw.exe")
     }
 
     SetDebugMode(enabled) {

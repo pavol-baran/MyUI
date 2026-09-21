@@ -1,3 +1,5 @@
 ﻿data/settings.ini
+.venv/
 __pycache__/
 *.pyc
+sidecars/BuffMonitor/buff_monitor.log
