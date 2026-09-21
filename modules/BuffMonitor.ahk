@@ -13,7 +13,7 @@ class BuffMonitorModule {
         this.timer := ""
 
         this.sidecarDir := A_ScriptDir "\sidecars\BuffMonitor"
-        this.scriptPath := this.sidecarDir "\poe_buff_overlay_v1.4.py"
+        this.scriptPath := this.sidecarDir "\poe_buff_overlay_v1.5.py"
         this.logPath := this.sidecarDir "\buff_monitor.log"
 
         global Cfg
