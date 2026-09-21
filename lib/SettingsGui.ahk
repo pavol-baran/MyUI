@@ -30,7 +30,8 @@ class SettingsGui {
                 "General",
                 "Overlay",
                 "Modules",
-                "Buff Monitor"
+                "Buff Monitor",
+                "Tempest Bell"
             ]
         )
         SettingsGui.ctl["tabs"] := tabs
@@ -248,6 +249,118 @@ class SettingsGui {
             "Changes are saved to settings.ini and the Buff Monitor "
             . "sidecar is restarted."
         )
+
+        ; ---------------- Tempest Bell ----------------
+
+        tabs.UseTab("Tempest Bell")
+
+        g.AddText("x28 y50 w100", "Source X")
+
+        eBellSourceX := g.AddEdit(
+            "x130 y46 w90 Number",
+            Cfg.Get("TempestBell", "SourceX", "0")
+        )
+
+        g.AddText("x270 y50 w100", "Source Y")
+
+        eBellSourceY := g.AddEdit(
+            "x370 y46 w90 Number",
+            Cfg.Get("TempestBell", "SourceY", "0")
+        )
+
+        g.AddText("x28 y84 w100", "Source width")
+
+        eBellSourceW := g.AddEdit(
+            "x130 y80 w90 Number",
+            Cfg.Get("TempestBell", "SourceWidth", "64")
+        )
+
+        g.AddText("x270 y84 w100", "Source height")
+
+        eBellSourceH := g.AddEdit(
+            "x370 y80 w90 Number",
+            Cfg.Get("TempestBell", "SourceHeight", "64")
+        )
+
+        g.AddText("x28 y118 w100", "Target X")
+
+        eBellTargetX := g.AddEdit(
+            "x130 y114 w90 Number",
+            Cfg.Get("TempestBell", "TargetX", "1200")
+        )
+
+        g.AddText("x270 y118 w100", "Target Y")
+
+        eBellTargetY := g.AddEdit(
+            "x370 y114 w90 Number",
+            Cfg.Get("TempestBell", "TargetY", "500")
+        )
+
+        g.AddText("x28 y152 w100", "Scale")
+
+        eBellScale := g.AddEdit(
+            "x130 y148 w90",
+            Cfg.Get("TempestBell", "Scale", "1.0")
+        )
+
+        g.AddText("x270 y152 w100", "Opacity")
+
+        eBellOpacity := g.AddEdit(
+            "x370 y148 w90 Number",
+            Cfg.Get("TempestBell", "Opacity", "255")
+        )
+
+        g.AddText("x28 y186 w100", "Refresh, ms")
+
+        eBellRefresh := g.AddEdit(
+            "x130 y182 w90 Number",
+            Cfg.Get(
+                "TempestBell",
+                "RefreshIntervalMs",
+                "33"
+            )
+        )
+
+        cbBellActiveOnly := g.AddCheckbox(
+            "x28 y224 w330",
+            "Show only while Path of Exile 2 is active"
+        )
+
+        cbBellActiveOnly.Value := (
+            Cfg.Get(
+                "TempestBell",
+                "ShowOnlyWhenPoeActive",
+                "1"
+            ) = "1"
+        )
+
+        SettingsGui.ctl["eBellSourceX"] := eBellSourceX
+        SettingsGui.ctl["eBellSourceY"] := eBellSourceY
+        SettingsGui.ctl["eBellSourceW"] := eBellSourceW
+        SettingsGui.ctl["eBellSourceH"] := eBellSourceH
+        SettingsGui.ctl["eBellTargetX"] := eBellTargetX
+        SettingsGui.ctl["eBellTargetY"] := eBellTargetY
+        SettingsGui.ctl["eBellScale"] := eBellScale
+        SettingsGui.ctl["eBellOpacity"] := eBellOpacity
+        SettingsGui.ctl["eBellRefresh"] := eBellRefresh
+        SettingsGui.ctl["cbBellActiveOnly"] := cbBellActiveOnly
+
+        bBellApply := g.AddButton(
+            "x28 y270 w150 h30",
+            "Apply Clone Settings"
+        )
+
+        bBellApply.OnEvent(
+            "Click",
+            (*) => SettingsGui.ApplyTempestBell()
+        )
+
+        g.AddText(
+            "x28 y314 w430 cGray",
+            "Coordinates are relative to the PoE2 client area.`n"
+            . "Click Apply to update the clone."
+        )
+
         tabs.UseTab()
         g.AddButton(
             "x400 y460 w100 h28",
@@ -353,6 +466,100 @@ class SettingsGui {
         )
 
         buffModule.ApplySettings(settings)
+    }
+
+    static ApplyTempestBell() {
+        global Modules
+
+        c := SettingsGui.ctl
+
+        sourceW := c["eBellSourceW"].Value + 0
+        sourceH := c["eBellSourceH"].Value + 0
+        scale := Trim(c["eBellScale"].Value)
+        opacity := c["eBellOpacity"].Value + 0
+        refreshMs := c["eBellRefresh"].Value + 0
+
+        if (sourceW < 1 || sourceH < 1) {
+            MsgBox(
+                "Source width and height must be greater than zero.",
+                "Tempest Bell",
+                "Icon!"
+            )
+            return
+        }
+
+        if (
+            !IsNumber(scale)
+            || scale < 0.1
+            || scale > 5
+        ) {
+            MsgBox(
+                "Scale must be between 0.1 and 5.0.",
+                "Tempest Bell",
+                "Icon!"
+            )
+            return
+        }
+
+        if (
+            opacity < 0
+            || opacity > 255
+        ) {
+            MsgBox(
+                "Opacity must be between 0 and 255.",
+                "Tempest Bell",
+                "Icon!"
+            )
+            return
+        }
+
+        if (
+            refreshMs < 16
+            || refreshMs > 1000
+        ) {
+            MsgBox(
+                "Refresh interval must be between 16 and 1000 ms.",
+                "Tempest Bell",
+                "Icon!"
+            )
+            return
+        }
+
+        settings := Map(
+            "SourceX",
+            c["eBellSourceX"].Value + 0,
+            "SourceY",
+            c["eBellSourceY"].Value + 0,
+            "SourceWidth",
+            sourceW,
+            "SourceHeight",
+            sourceH,
+            "TargetX",
+            c["eBellTargetX"].Value + 0,
+            "TargetY",
+            c["eBellTargetY"].Value + 0,
+            "Scale",
+            scale,
+            "Opacity",
+            opacity,
+            "RefreshIntervalMs",
+            refreshMs,
+            "ShowOnlyWhenPoeActive",
+            c["cbBellActiveOnly"].Value ? "1" : "0"
+        )
+
+        bellModule := Modules.Get("Tempest Bell")
+
+        if !bellModule {
+            MsgBox(
+                "The Tempest Bell module is not registered.",
+                "Tempest Bell",
+                "Icon!"
+            )
+            return
+        }
+
+        bellModule.ApplySettings(settings)
     }
 
     ; separate factory so each checkbox closes over its own name

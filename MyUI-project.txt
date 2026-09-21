@@ -1,147 +1,218 @@
 ﻿
-===== FILE: MyUI.ahk =====
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-#Warn All, OutputDebug
+============================================================
+FILE: Buff_Monitor_Detection_Tuning_Guide.md
+============================================================
 
-; ============================================================
-;  MyUI - entry point
-;  Loads config, libs and modules, then idles.
-;  Add new features as files in /modules, register them below.
-; ============================================================
+# Buff Monitor Detection Tuning Guide
 
-SetWorkingDir(A_ScriptDir)
-Persistent()
+The main setting is **`DetectionIntervalMs`**. When the buff bar rearranges, Python temporarily keeps copying pixels from the old coordinates until the next template search finds Rend at the new position.
 
-#Include lib\AppConfig.ahk
-#Include lib\Overlay.ahk
-#Include lib\SettingsGui.ahk
-#Include lib\ModuleManager.ahk
+## Recommended Starting Preset
 
-; --- global singletons -------------------------------------
-global APP_NAME    := "MyUI"
-global APP_VERSION := "0.1.0"
-
-global Cfg     := AppConfig(A_ScriptDir "\data\settings.ini")
-global Overlay := OverlayWindow()
-global Modules := ModuleManager()
-
-; --- module registration -----------------------------------
-; When you add a module, #Include it and register it here.
-; Nothing registered yet - that is intentional for step 1.
-;
-;   #Include modules\Buffs.ahk
-;   Modules.Register(BuffsModule())
-
-Modules.InitAll()
-
-; --- tray --------------------------------------------------
-BuildTray()
-
-; --- hotkeys -----------------------------------------------
-Hotkey("F1", (*) => Overlay.Toggle())
-Hotkey("F2", (*) => SettingsGui.Show())
-Hotkey("^!r", (*) => Reload())
-Hotkey("^!q", (*) => ExitApp())
-
-; --- startup -----------------------------------------------
-if (Cfg.Get("General", "ShowOverlayOnStart", "1") = "1")
-    Overlay.Show()
-
-Overlay.SetLine("status", APP_NAME " v" APP_VERSION " - F1 overlay | F2 settings")
-
-TrayTip(APP_NAME " running", "F1 = overlay  F2 = settings  Ctrl+Alt+Q = quit")
-
-; ============================================================
-BuildTray() {
-    T := A_TrayMenu
-    T.Delete()
-    T.Add("Settings`tF2", (*) => SettingsGui.Show())
-    T.Add("Toggle overlay`tF1", (*) => Overlay.Toggle())
-    T.Add()
-    T.Add("Reload`tCtrl+Alt+R", (*) => Reload())
-    T.Add("Exit`tCtrl+Alt+Q", (*) => ExitApp())
-    T.Default := "Settings`tF2"
-    A_IconTip := APP_NAME " v" APP_VERSION
-}
-
-OnExit(SaveOnExit)
-global Cfg
-SaveOnExit(*) {
-    Cfg.Flush()
-}
-
-===== FILE: README.md =====
-# MyUI â€” step 1 skeleton
-
-Bare AHK v2 app: starts, sits in tray, shows a transparent click-through
-overlay, and has an empty-but-working settings window. No features yet.
-
-## Requires
-AutoHotkey **v2.0** (2.0.28 or newer). Run `MyUI.ahk`.
-
-## Hotkeys
-| Key | Action |
-|---|---|
-| `F1` | Toggle overlay |
-| `F2` | Settings |
-| `Ctrl+Alt+R` | Reload |
-| `Ctrl+Alt+Q` | Exit |
-
-## Layout
-```
-MyUI.ahk            entry point â€” include + register modules here
-lib/
-  AppConfig.ahk     INI wrapper, cached
-  Overlay.ahk       transparent click-through text overlay
-  SettingsGui.ahk   tabbed settings window
-  ModuleManager.ahk module lifecycle
-modules/
-  _Template.ahk     copy this to start a feature
-data/
-  settings.ini      auto-created on first run
-img/                templates/assets later
+```ini
+DetectionIntervalMs=100
+DisplayIntervalMs=33
+MissesBeforeGone=3
+RendThreshold=0.72
+PowerChargeThreshold=0.72
 ```
 
-## Adding a feature
-1. Copy `modules/_Template.ahk`, rename the class and `Name`.
-2. In `MyUI.ahk`: `#Include modules\Thing.ahk` then `Modules.Register(ThingModule())`
-   â€” both above the `Modules.InitAll()` line.
-3. It appears in **Settings â†’ Modules** with an on/off toggle that persists.
+### What Changes
 
-## Notes on two fixed gotchas
-- The config class is `AppConfig`, **not** `Config`. `Config` collides with an
-  existing symbol in the VS Code AHK definitions and the language server
-  rejects the constructor call with *"Expected 0 parameters, but got 1"*.
-- `Integer(...)` is avoided throughout. The language server reports it as an
-  unassigned variable under `#Warn All`. Unary `+` (`val + 0`) coerces
-  strings to numbers instead â€” see `AppConfig.GetInt()`.
+- **Detection: 200 ms to 100 ms**  
+  Rend's new position can be found up to twice as quickly.
 
-## Overlay notes
-- Click-through via `WS_EX_TRANSPARENT` (`+E0x20`) + layered (`+E0x80000`),
-  background keyed out with `WinSetTransColor`.
-- Uses a fixed pool of 12 text controls rather than rebuilding the GUI, so
-  frequent updates stay cheap. Raise `MAX_LINES` if you need more.
-- `-DPIScale` is set, so coordinates are literal pixels.
-- Call `Overlay.SetLine("id", "text")` / `Overlay.ClearLine("id")`. Each caller
-  owns its own id, so modules can't clobber each other.
+- **Display: 50 ms to 33 ms**  
+  Live icon pixels update at approximately 30 FPS instead of 20 FPS.
 
-## Next steps
-- Attach overlay to a target window instead of screen coords.
-- Drag-to-position mode (temporarily drop `+E0x20` while dragging).
-- Python sidecar launch/teardown in `ModuleManager`.
+- **Misses: 2 to 3**  
+  Three consecutive misses are required before switching to the grayscale icon.
 
-===== FILE: data\settings.ini =====
+At 100 ms detection and three misses, confirmed disappearance takes roughly 300 ms. This should suppress brief false-negative flickers while keeping the indicator responsive.
+
+## What Each Setting Affects
+
+### `DetectionIntervalMs`
+
+Controls how frequently Python searches the buff bar.
+
+Lower values:
+
+- Reacquire Rend faster when icons rearrange
+- Reduce the time spent copying the wrong old location
+- Increase CPU use
+
+Try in this order:
+
+```ini
+DetectionIntervalMs=100
+```
+
+Then, only if needed:
+
+```ini
+DetectionIntervalMs=75
+```
+
+Do not go below 50 ms for this feature. The timer and icon position do not require extremely high-frequency detection.
+
+### `DisplayIntervalMs`
+
+Controls how frequently pixels are copied from the **last detected location**.
+
+Lower values make the live timer look smoother:
+
+```ini
+DisplayIntervalMs=33
+```
+
+or:
+
+```ini
+DisplayIntervalMs=25
+```
+
+However, this does **not** find the new position faster. If the stored position is temporarily stale, faster display refresh can reproduce the wrong pixels more frequently. Therefore, adjust detection first.
+
+### `MissesBeforeGone`
+
+Controls false-negative filtering:
+
+```ini
+MissesBeforeGone=3
+```
+
+If the gray fallback still appears briefly:
+
+```ini
+MissesBeforeGone=4
+```
+
+Use this together with faster detection. For example:
+
+```ini
+DetectionIntervalMs=75
+MissesBeforeGone=4
+```
+
+That still gives approximately 300 ms before confirmed disappearance.
+
+Higher values reduce flicker but delay the correct transition when Rend genuinely expires.
+
+### Thresholds
+
+Do not adjust thresholds first.
+
+Observed scores were roughly:
+
+```text
+Rend present:         0.971 to 1.000
+Rend absent:          around 0.461
+
+Power Charge present: 0.979 to 1.000
+Power Charge absent:  as high as 0.691
+```
+
+The current thresholds:
+
+```ini
+RendThreshold=0.72
+PowerChargeThreshold=0.72
+```
+
+have good separation. In particular, lowering the Power Charge threshold below approximately `0.70` could classify an absent state scoring `0.691` as present.
+
+## Suggested Test Presets
+
+### Balanced, Recommended First
+
+```ini
+DetectionIntervalMs=100
+DisplayIntervalMs=33
+MissesBeforeGone=3
+```
+
+### Faster Response
+
+```ini
+DetectionIntervalMs=75
+DisplayIntervalMs=25
+MissesBeforeGone=4
+```
+
+### Lower Processing
+
+```ini
+DetectionIntervalMs=125
+DisplayIntervalMs=33
+MissesBeforeGone=3
+```
+
+## How to Test Consistently
+
+Use a situation where another buff repeatedly appears and disappears before Rend, forcing Rend to move between slots.
+
+Watch for different problems:
+
+1. **Wrong icon appears briefly**  
+   Reduce `DetectionIntervalMs`.
+
+2. **Gray Rend icon appears briefly**  
+   Increase `MissesBeforeGone`.
+
+3. **Correct Rend icon looks visually choppy**  
+   Reduce `DisplayIntervalMs`.
+
+Change only one parameter per test, so the effect of each change is clear.
+
+## If Settings Cannot Remove the Blip Completely
+
+A brief wrong-icon flash may remain because the display loop continuously copies the old screen rectangle while detection is reacquiring Rend.
+
+The clean code-level fix would be:
+
+- Save the last valid Rend crop
+- When the old location becomes questionable, freeze that saved crop
+- Resume live copying only after Rend is found at the new location
+
+This prevents a neighboring icon from appearing during buff-bar reflow. Start with the balanced preset first because measured CPU headroom is substantial and faster detection may already make the transition effectively invisible.
+
+
+============================================================
+FILE: data\settings.ini
+============================================================
 
 [General]
 ShowOverlayOnStart=1
+
 [Overlay]
-X=400
-Y=40
+X=40
+Y=120
 FontSize=11
 FontColor=FFFFFF
 
-===== FILE: lib\AppConfig.ahk =====
+[Modules]
+Buff Monitor=1
+
+[BuffMonitor]
+DebugMode=0
+OverlayX=1778
+OverlayY=476
+Scale=0.40
+DetectionIntervalMs=300
+DisplayIntervalMs=30
+ExtraBelowIcon=28
+MissesBeforeGone=2
+RendThreshold=0.72
+PowerChargeThreshold=0.72
+ShowPowerChargePlus=1
+ShowOnlyWhenPoeActive=1
+
+
+============================================================
+FILE: lib\AppConfig.ahk
+============================================================
+
 ; ============================================================
 ;  AppConfig - thin INI wrapper with an in-memory cache.
 ;  Usage:  Cfg.Get("Section","Key","default")
@@ -202,7 +273,11 @@ class AppConfig {
     }
 }
 
-===== FILE: lib\ModuleManager.ahk =====
+
+============================================================
+FILE: lib\ModuleManager.ahk
+============================================================
+
 ; ============================================================
 ;  ModuleManager
 ;  Holds registered feature modules and drives their lifecycle.
@@ -256,15 +331,37 @@ class ModuleManager {
         return Cfg.Get("Modules", name, "1") = "1"
     }
 
+    Get(name) {
+        if this.items.Has(name)
+            return this.items[name]
+
+        return ""
+    }
+
     Names() {
         out := []
         for name, _ in this.items
             out.Push(name)
         return out
     }
+
+    ShutdownAll() {
+        for name, mod in this.items {
+            try mod.Disable()
+            catch as e {
+                OutputDebug(
+                    "[MyUI] module '" name
+                    "' failed to shut down: " e.Message
+                )
+            }
+        }
+    }
 }
 
-===== FILE: lib\Overlay.ahk =====
+============================================================
+FILE: lib\Overlay.ahk
+============================================================
+
 ; ============================================================
 ;  OverlayWindow
 ;  Transparent, always-on-top, click-through text overlay.
@@ -402,7 +499,11 @@ class OverlayWindow {
     }
 }
 
-===== FILE: lib\SettingsGui.ahk =====
+
+============================================================
+FILE: lib\SettingsGui.ahk
+============================================================
+
 ; ============================================================
 ;  SettingsGui
 ;  Single settings window. Tabs are the extension point:
@@ -419,7 +520,7 @@ class SettingsGui {
             return
         }
         SettingsGui.Build()
-        SettingsGui.win.Show("w420 h360")
+        SettingsGui.win.Show("w520 h500")
     }
 
     static Build() {
@@ -429,7 +530,15 @@ class SettingsGui {
         g.OnEvent("Close", (*) => g.Hide())
         g.OnEvent("Escape", (*) => g.Hide())
 
-        tabs := g.AddTab3("x10 y10 w400 h300", ["General", "Overlay", "Modules"])
+        tabs := g.AddTab3(
+            "x10 y10 w500 h440",
+            [
+                "General",
+                "Overlay",
+                "Modules",
+                "Buff Monitor"
+            ]
+        )
         SettingsGui.ctl["tabs"] := tabs
 
         ; ---------------- General ----------------
@@ -481,11 +590,175 @@ class SettingsGui {
                 cb.Value := Modules.IsEnabled(name)
                 cb.OnEvent("Click", SettingsGui.MakeToggle(name))
                 y += 26
+
+                if (name = "Buff Monitor") {
+                    buffModule := Modules.Get("Buff Monitor")
+
+                    cbDebug := g.AddCheckbox(
+                        "x48 y" y " w320",
+                        "Debug mode - show Python console"
+                    )
+
+                    cbDebug.Value := buffModule.debugMode
+
+                    cbDebug.OnEvent(
+                        "Click",
+                        (c, *) => buffModule.SetDebugMode(c.Value)
+                    )
+
+                    SettingsGui.ctl["cbBuffDebug"] := cbDebug
+                    y += 30
+                }
             }
         }
+        ; ---------------- Buff Monitor ----------------
 
+        tabs.UseTab("Buff Monitor")
+
+        buffModule := Modules.Get("Buff Monitor")
+
+        g.AddText("x28 y50 w115", "Overlay X")
+        eBuffX := g.AddEdit(
+            "x150 y46 w90 Number",
+            Cfg.Get("BuffMonitor", "OverlayX", "1650")
+        )
+
+        g.AddText("x270 y50 w90", "Overlay Y")
+        eBuffY := g.AddEdit(
+            "x360 y46 w90 Number",
+            Cfg.Get("BuffMonitor", "OverlayY", "760")
+        )
+
+        g.AddText("x28 y84 w115", "Scale")
+        eBuffScale := g.AddEdit(
+            "x150 y80 w90",
+            Cfg.Get("BuffMonitor", "Scale", "1.25")
+        )
+
+        g.AddText("x270 y84 w90", "Timer area")
+        eBuffExtra := g.AddEdit(
+            "x360 y80 w90 Number",
+            Cfg.Get("BuffMonitor", "ExtraBelowIcon", "28")
+        )
+
+        g.AddText("x28 y118 w115", "Detection, ms")
+        eBuffDetection := g.AddEdit(
+            "x150 y114 w90 Number",
+            Cfg.Get(
+                "BuffMonitor",
+                "DetectionIntervalMs",
+                "200"
+            )
+        )
+
+        g.AddText("x270 y118 w90", "Display, ms")
+        eBuffDisplay := g.AddEdit(
+            "x360 y114 w90 Number",
+            Cfg.Get(
+                "BuffMonitor",
+                "DisplayIntervalMs",
+                "50"
+            )
+        )
+
+        g.AddText("x28 y152 w115", "Misses before gone")
+        eBuffMisses := g.AddEdit(
+            "x150 y148 w90 Number",
+            Cfg.Get("BuffMonitor", "MissesBeforeGone", "2")
+        )
+
+        g.AddText("x28 y186 w115", "Rend threshold")
+        eBuffRendThreshold := g.AddEdit(
+            "x150 y182 w90",
+            Cfg.Get("BuffMonitor", "RendThreshold", "0.72")
+        )
+
+        g.AddText("x270 y186 w90", "Charge threshold")
+        eBuffChargeThreshold := g.AddEdit(
+            "x360 y182 w90",
+            Cfg.Get(
+                "BuffMonitor",
+                "PowerChargeThreshold",
+                "0.72"
+            )
+        )
+
+        cbBuffPlus := g.AddCheckbox(
+            "x28 y224 w300",
+            "Show green + when Power Charge is available"
+        )
+
+        cbBuffPlus.Value :=
+            Cfg.Get(
+                "BuffMonitor",
+                "ShowPowerChargePlus",
+                "1"
+            ) = "1"
+
+        cbBuffActiveOnly := g.AddCheckbox(
+            "x28 y252 w300",
+            "Show only while Path of Exile 2 is active"
+        )
+
+        cbBuffActiveOnly.Value :=
+            Cfg.Get(
+                "BuffMonitor",
+                "ShowOnlyWhenPoeActive",
+                "1"
+            ) = "1"
+
+        cbBuffDebugTab := g.AddCheckbox(
+            "x28 y280 w300",
+            "Debug mode: show Python console"
+        )
+
+        cbBuffDebugTab.Value := buffModule.debugMode
+
+        SettingsGui.ctl["eBuffX"] := eBuffX
+        SettingsGui.ctl["eBuffY"] := eBuffY
+        SettingsGui.ctl["eBuffScale"] := eBuffScale
+        SettingsGui.ctl["eBuffExtra"] := eBuffExtra
+        SettingsGui.ctl["eBuffDetection"] := eBuffDetection
+        SettingsGui.ctl["eBuffDisplay"] := eBuffDisplay
+        SettingsGui.ctl["eBuffMisses"] := eBuffMisses
+
+        SettingsGui.ctl[
+            "eBuffRendThreshold"
+            ] := eBuffRendThreshold
+
+        SettingsGui.ctl[
+            "eBuffChargeThreshold"
+            ] := eBuffChargeThreshold
+
+        SettingsGui.ctl["cbBuffPlus"] := cbBuffPlus
+        SettingsGui.ctl[
+            "cbBuffActiveOnly"
+            ] := cbBuffActiveOnly
+
+        SettingsGui.ctl[
+            "cbBuffDebugTab"
+            ] := cbBuffDebugTab
+
+        bBuffApply := g.AddButton(
+            "x28 y324 w150 h30 Default",
+            "Apply and Restart"
+        )
+
+        bBuffApply.OnEvent(
+            "Click",
+            (*) => SettingsGui.ApplyBuffMonitor()
+        )
+
+        g.AddText(
+            "x28 y368 w430 cGray",
+            "Changes are saved to settings.ini and the Buff Monitor "
+            . "sidecar is restarted."
+        )
         tabs.UseTab()
-        g.AddButton("x310 y320 w100 h28", "Close").OnEvent("Click", (*) => g.Hide())
+        g.AddButton(
+            "x400 y460 w100 h28",
+            "Close"
+        )
 
         SettingsGui.win := g
     }
@@ -501,9 +774,91 @@ class SettingsGui {
 
     static ApplyFont() {
         global Cfg
-        Cfg.Set("Overlay", "FontSize",  SettingsGui.ctl["eS"].Value)
+        Cfg.Set("Overlay", "FontSize", SettingsGui.ctl["eS"].Value)
         Cfg.Set("Overlay", "FontColor", SettingsGui.ctl["eC"].Value)
         Reload()
+    }
+
+    static ApplyBuffMonitor() {
+        global Modules
+
+        c := SettingsGui.ctl
+
+        scale := Trim(c["eBuffScale"].Value)
+        rendThreshold := Trim(
+            c["eBuffRendThreshold"].Value
+        )
+        chargeThreshold := Trim(
+            c["eBuffChargeThreshold"].Value
+        )
+
+        if !IsNumber(scale) || scale < 0.25 || scale > 5 {
+            MsgBox(
+                "Scale must be between 0.25 and 5.0.",
+                "Buff Monitor",
+                "Icon!"
+            )
+            return
+        }
+
+        if (
+            !IsNumber(rendThreshold)
+            || rendThreshold < 0
+            || rendThreshold > 1
+        ) {
+            MsgBox(
+                "Rend threshold must be between 0 and 1.",
+                "Buff Monitor",
+                "Icon!"
+            )
+            return
+        }
+
+        if (
+            !IsNumber(chargeThreshold)
+            || chargeThreshold < 0
+            || chargeThreshold > 1
+        ) {
+            MsgBox(
+                "Power Charge threshold must be between 0 and 1.",
+                "Buff Monitor",
+                "Icon!"
+            )
+            return
+        }
+
+        settings := Map(
+            "OverlayX",
+            c["eBuffX"].Value + 0,
+            "OverlayY",
+            c["eBuffY"].Value + 0,
+            "Scale",
+            scale,
+            "DetectionIntervalMs",
+            c["eBuffDetection"].Value + 0,
+            "DisplayIntervalMs",
+            c["eBuffDisplay"].Value + 0,
+            "ExtraBelowIcon",
+            c["eBuffExtra"].Value + 0,
+            "MissesBeforeGone",
+            c["eBuffMisses"].Value + 0,
+            "RendThreshold",
+            rendThreshold,
+            "PowerChargeThreshold",
+            chargeThreshold,
+            "ShowPowerChargePlus",
+            c["cbBuffPlus"].Value ? "1" : "0",
+            "ShowOnlyWhenPoeActive",
+            c["cbBuffActiveOnly"].Value ? "1" : "0"
+        )
+
+        buffModule := Modules.Get("Buff Monitor")
+
+        buffModule.SetDebugMode(
+            c["cbBuffDebugTab"].Value
+        )
+
+        buffModule.ApplySettings(settings)
     }
 
     ; separate factory so each checkbox closes over its own name
@@ -512,7 +867,10 @@ class SettingsGui {
     }
 }
 
-===== FILE: modules\_Template.ahk =====
+============================================================
+FILE: modules\_Template.ahk
+============================================================
+
 ; ============================================================
 ;  Module template - copy this file, rename the class, then in
 ;  MyUI.ahk add:
@@ -558,4 +916,503 @@ class TemplateModule {
         ; example: write one line to the overlay
         ; Overlay.SetLine(this.Name, "hello " A_TickCount)
     }
+}
+
+
+============================================================
+FILE: modules\BuffMonitor.ahk
+============================================================
+
+; ============================================================
+; Buff Monitor module v0.2
+; Starts the Python sidecar while Path of Exile is running.
+; Captures Python errors and prevents restart loops.
+; ============================================================
+
+class BuffMonitorModule {
+    Name := "Buff Monitor"
+
+    __New() {
+        this.active := false
+        this.pythonPid := 0
+        this.timer := ""
+
+        this.sidecarDir := A_ScriptDir "\sidecars\BuffMonitor"
+        this.scriptPath := this.sidecarDir "\poe_buff_overlay_v1.6.2.py"
+        this.logPath := this.sidecarDir "\buff_monitor.log"
+
+        global Cfg
+
+        this.debugMode := Cfg.Get("BuffMonitor", "DebugMode", "0") = "1"
+        this.UpdatePythonExe()
+
+        this.gameExe := "PathOfExileSteam.exe"
+
+        this.lastStartTick := 0
+        this.restartDelayMs := 5000
+        this.failedStarts := 0
+        this.maxFailedStarts := 3
+    }
+
+    Init() {
+        if !DirExist(this.sidecarDir) {
+            throw Error(
+                "Buff Monitor folder not found:`n" this.sidecarDir
+            )
+        }
+
+        if !FileExist(this.scriptPath) {
+            throw Error(
+                "Buff Monitor Python file not found:`n" this.scriptPath
+            )
+        }
+    }
+
+    Enable() {
+        if this.active
+            return
+
+        this.active := true
+        this.failedStarts := 0
+        this.lastStartTick := 0
+
+        this.timer := ObjBindMethod(this, "Tick")
+
+        this.Tick()
+        SetTimer(this.timer, 1000)
+
+        OutputDebug("[MyUI] Buff Monitor enabled`n")
+    }
+
+    Disable() {
+        if !this.active
+            return
+
+        this.active := false
+
+        if this.timer
+            SetTimer(this.timer, 0)
+
+        this.StopPython()
+
+        OutputDebug("[MyUI] Buff Monitor disabled`n")
+    }
+
+    Tick() {
+        if !this.active
+            return
+
+        poeRunning := ProcessExist(this.gameExe) != 0
+        pythonRunning := this.IsPythonRunning()
+
+        if !poeRunning {
+            if pythonRunning
+                this.StopPython()
+
+            return
+        }
+
+        if pythonRunning
+            return
+
+        ; Avoid launching repeatedly every second.
+        if (A_TickCount - this.lastStartTick < this.restartDelayMs)
+            return
+
+        ; Stop retrying after repeated immediate failures.
+        if (this.failedStarts >= this.maxFailedStarts) {
+            OutputDebug(
+                "[MyUI] Buff Monitor stopped retrying after "
+                this.failedStarts
+                " failures. Check buff_monitor.log.`n"
+            )
+
+            return
+        }
+
+        this.StartPython()
+    }
+
+    UpdatePythonExe() {
+        this.pythonExe := A_ScriptDir
+            . "\.venv\Scripts\"
+            . (this.debugMode ? "python.exe" : "pythonw.exe")
+    }
+
+    SetDebugMode(enabled) {
+        global Cfg
+
+        enabled := enabled ? true : false
+
+        if (this.debugMode = enabled)
+            return
+
+        this.debugMode := enabled
+        this.UpdatePythonExe()
+
+        Cfg.Set(
+            "BuffMonitor",
+            "DebugMode",
+            enabled ? "1" : "0"
+        )
+
+        OutputDebug(
+            "[MyUI] Buff Monitor debug mode: "
+            (enabled ? "ON" : "OFF")
+            "`n"
+        )
+
+        ; Restart the sidecar with the correct Python executable.
+        if this.active {
+            this.StopPython()
+
+            this.failedStarts := 0
+            this.lastStartTick := 0
+
+            this.Tick()
+        }
+    }
+
+    Restart() {
+        if !this.active
+            return
+
+        OutputDebug(
+            "[MyUI] Restarting Buff Monitor`n"
+        )
+
+        this.StopPython()
+
+        this.failedStarts := 0
+        this.lastStartTick := 0
+
+        this.Tick()
+    }
+
+    ApplySettings(settings) {
+        global Cfg
+
+        for key, value in settings
+            Cfg.Set("BuffMonitor", key, value)
+
+        this.Restart()
+    }
+
+    StartPython() {
+        if this.IsPythonRunning()
+            return
+
+        this.lastStartTick := A_TickCount
+
+        if !FileExist(this.pythonExe) {
+            this.failedStarts := this.maxFailedStarts
+
+            OutputDebug(
+                "[MyUI] Python executable not found: "
+                this.pythonExe
+                "`n"
+            )
+            return
+        }
+
+        try {
+            command := Format(
+                '"{1}" "{2}"',
+                this.pythonExe,
+                this.scriptPath
+            )
+
+            Run(
+                command,
+                this.sidecarDir,
+                "",
+                &pid
+            )
+
+            this.pythonPid := pid
+
+            OutputDebug(
+                "[MyUI] Buff Monitor Python started. PID: "
+                pid
+                "`n"
+            )
+
+            SetTimer(
+                ObjBindMethod(this, "CheckStartup", pid),
+                -1500
+            )
+        } catch as e {
+            this.pythonPid := 0
+            this.failedStarts += 1
+
+            OutputDebug(
+                "[MyUI] Buff Monitor launch failed: "
+                e.Message
+                "`n"
+            )
+        }
+    }
+
+
+    CheckStartup(expectedPid) {
+        if !this.active
+            return
+
+        if (this.pythonPid != expectedPid)
+            return
+
+        if ProcessExist(expectedPid) {
+            this.failedStarts := 0
+
+            OutputDebug(
+                "[MyUI] Buff Monitor startup confirmed. PID: "
+                expectedPid
+                "`n"
+            )
+
+            return
+        }
+
+        this.pythonPid := 0
+        this.failedStarts += 1
+
+        OutputDebug(
+            "[MyUI] Buff Monitor exited during startup. Failure "
+            this.failedStarts
+            " of "
+            this.maxFailedStarts
+            ". Check buff_monitor.log.`n"
+        )
+    }
+
+    StopPython() {
+        if !this.pythonPid
+            return
+
+        pid := this.pythonPid
+        this.pythonPid := 0
+
+        try {
+            if ProcessExist(pid)
+                ProcessClose(pid)
+        } catch as e {
+            OutputDebug(
+                "[MyUI] Failed to stop Buff Monitor: "
+                e.Message
+                "`n"
+            )
+        }
+
+        OutputDebug(
+            "[MyUI] Buff Monitor Python stopped. PID: "
+            pid
+            "`n"
+        )
+    }
+
+    IsPythonRunning() {
+        if !this.pythonPid
+            return false
+
+        if ProcessExist(this.pythonPid)
+            return true
+
+        this.pythonPid := 0
+        return false
+    }
+
+    WriteModuleError(message) {
+        try {
+            FileAppend(
+                FormatTime(, "yyyy-MM-dd HH:mm:ss")
+                " "
+                message
+                "`n",
+                this.logPath,
+                "UTF-8"
+            )
+        }
+    }
+}
+
+============================================================
+FILE: MyUI.ahk
+============================================================
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+#Warn All, OutputDebug
+
+; ============================================================
+;  MyUI - entry point
+;  Loads config, libs and modules, then idles.
+;  Add new features as files in /modules, register them below.
+; ============================================================
+
+SetWorkingDir(A_ScriptDir)
+Persistent()
+
+#Include lib\AppConfig.ahk
+#Include lib\Overlay.ahk
+#Include lib\SettingsGui.ahk
+#Include lib\ModuleManager.ahk
+#Include modules\BuffMonitor.ahk
+
+; --- global singletons -------------------------------------
+global APP_NAME    := "MyUI"
+global APP_VERSION := "0.1.0"
+
+global Cfg     := AppConfig(A_ScriptDir "\data\settings.ini")
+global Overlay := OverlayWindow()
+global Modules := ModuleManager()
+
+; --- module registration -----------------------------------
+; When you add a module, #Include it and register it here.
+; Nothing registered yet - that is intentional for step 1.
+;
+;   #Include modules\Buffs.ahk
+;   Modules.Register(BuffsModule())
+
+Modules.Register(BuffMonitorModule())
+Modules.InitAll()
+
+; --- tray --------------------------------------------------
+BuildTray()
+
+; --- hotkeys -----------------------------------------------
+Hotkey("F1", (*) => Overlay.Toggle())
+Hotkey("F2", (*) => SettingsGui.Show())
+Hotkey("^!r", (*) => Reload())
+Hotkey("^!q", (*) => ExitApp())
+
+; --- startup -----------------------------------------------
+if (Cfg.Get("General", "ShowOverlayOnStart", "1") = "1")
+    Overlay.Show()
+
+Overlay.SetLine("status", APP_NAME " v" APP_VERSION " - F1 overlay | F2 settings")
+
+TrayTip(APP_NAME " running", "F1 = overlay  F2 = settings  Ctrl+Alt+Q = quit")
+
+; ============================================================
+BuildTray() {
+    T := A_TrayMenu
+    T.Delete()
+    T.Add("Settings`tF2", (*) => SettingsGui.Show())
+    T.Add("Toggle overlay`tF1", (*) => Overlay.Toggle())
+    T.Add()
+    T.Add("Reload`tCtrl+Alt+R", (*) => Reload())
+    T.Add("Exit`tCtrl+Alt+Q", (*) => ExitApp())
+    T.Default := "Settings`tF2"
+    A_IconTip := APP_NAME " v" APP_VERSION
+}
+
+OnExit(SaveOnExit)
+
+SaveOnExit(*) {
+    global Cfg, Modules
+
+    Modules.ShutdownAll()
+    Cfg.Flush()
+}
+
+
+============================================================
+FILE: README.md
+============================================================
+
+# MyUI â€” step 1 skeleton
+
+Bare AHK v2 app: starts, sits in tray, shows a transparent click-through
+overlay, and has an empty-but-working settings window. No features yet.
+
+## Requires
+AutoHotkey **v2.0** (2.0.28 or newer). Run `MyUI.ahk`.
+
+## Hotkeys
+| Key | Action |
+|---|---|
+| `F1` | Toggle overlay |
+| `F2` | Settings |
+| `Ctrl+Alt+R` | Reload |
+| `Ctrl+Alt+Q` | Exit |
+
+## Layout
+```
+MyUI.ahk            entry point â€” include + register modules here
+lib/
+  AppConfig.ahk     INI wrapper, cached
+  Overlay.ahk       transparent click-through text overlay
+  SettingsGui.ahk   tabbed settings window
+  ModuleManager.ahk module lifecycle
+modules/
+  _Template.ahk     copy this to start a feature
+data/
+  settings.ini      auto-created on first run
+img/                templates/assets later
+```
+
+## Adding a feature
+1. Copy `modules/_Template.ahk`, rename the class and `Name`.
+2. In `MyUI.ahk`: `#Include modules\Thing.ahk` then `Modules.Register(ThingModule())`
+   â€” both above the `Modules.InitAll()` line.
+3. It appears in **Settings â†’ Modules** with an on/off toggle that persists.
+
+## Notes on two fixed gotchas
+- The config class is `AppConfig`, **not** `Config`. `Config` collides with an
+  existing symbol in the VS Code AHK definitions and the language server
+  rejects the constructor call with *"Expected 0 parameters, but got 1"*.
+- `Integer(...)` is avoided throughout. The language server reports it as an
+  unassigned variable under `#Warn All`. Unary `+` (`val + 0`) coerces
+  strings to numbers instead â€” see `AppConfig.GetInt()`.
+
+## Overlay notes
+- Click-through via `WS_EX_TRANSPARENT` (`+E0x20`) + layered (`+E0x80000`),
+  background keyed out with `WinSetTransColor`.
+- Uses a fixed pool of 12 text controls rather than rebuilding the GUI, so
+  frequent updates stay cheap. Raise `MAX_LINES` if you need more.
+- `-DPIScale` is set, so coordinates are literal pixels.
+- Call `Overlay.SetLine("id", "text")` / `Overlay.ClearLine("id")`. Each caller
+  owns its own id, so modules can't clobber each other.
+
+## Next steps
+- Attach overlay to a target window instead of screen coords.
+- Drag-to-position mode (temporarily drop `+E0x20` while dragging).
+- Python sidecar launch/teardown in `ModuleManager`.
+
+
+============================================================
+FILE: requirements.txt
+============================================================
+
+opencv-python
+numpy
+mss
+pywin32
+Pillow
+
+============================================================
+FILE: sidecars\BuffMonitor\detector_config.json
+============================================================
+
+{
+  "search_roi": [
+    0,
+    0,
+    2037,
+    118
+  ],
+  "thresholds": {
+    "rend": 0.72,
+    "power_charge": 0.72
+  },
+  "templates": {
+    "rend": {
+      "file": "template_rend.png"
+    },
+    "power_charge": {
+      "file": "template_power_charge.png"
+    }
+  },
+  "misses_before_gone": 2,
+  "poll_interval_seconds": 0.5
 }

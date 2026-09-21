@@ -12,10 +12,13 @@ SetWorkingDir(A_ScriptDir)
 Persistent()
 
 #Include lib\AppConfig.ahk
+#Include lib\Gdip_All.ahk
+#Include lib\CloneFrame.ahk
 #Include lib\Overlay.ahk
 #Include lib\SettingsGui.ahk
 #Include lib\ModuleManager.ahk
 #Include modules\BuffMonitor.ahk
+#Include modules\TempestBell.ahk
 
 ; --- global singletons -------------------------------------
 global APP_NAME    := "MyUI"
@@ -33,6 +36,7 @@ global Modules := ModuleManager()
 ;   Modules.Register(BuffsModule())
 
 Modules.Register(BuffMonitorModule())
+Modules.Register(TempestBellModule())
 Modules.InitAll()
 
 ; --- tray --------------------------------------------------
