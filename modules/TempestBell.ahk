@@ -113,8 +113,17 @@ class TempestBellModule {
     }
 
     Tick() {
+        global ZoneContext
+
         if !this.active
             return
+
+        if !ZoneContext.isTrackingAllowed {
+            if this.frame
+                this.frame.Stop()
+
+            return
+        }
 
         if !ProcessExist(this.gameExe) {
             if this.frame

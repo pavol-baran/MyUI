@@ -12,6 +12,7 @@ SetWorkingDir(A_ScriptDir)
 Persistent()
 
 #Include lib\AppConfig.ahk
+#Include lib\ZoneContext.ahk
 #Include lib\Gdip_All.ahk
 #Include lib\CloneFrame.ahk
 #Include lib\Overlay.ahk
@@ -21,12 +22,18 @@ Persistent()
 #Include modules\TempestBell.ahk
 
 ; --- global singletons -------------------------------------
-global APP_NAME    := "MyUI"
+global APP_NAME := "MyUI"
 global APP_VERSION := "0.1.0"
 
-global Cfg     := AppConfig(A_ScriptDir "\data\settings.ini")
+global Cfg := AppConfig(
+    A_ScriptDir "\data\settings.ini"
+)
+
+global ZoneContext := ZoneContextService()
 global Overlay := OverlayWindow()
 global Modules := ModuleManager()
+
+ZoneContext.Start()
 
 ; --- module registration -----------------------------------
 ; When you add a module, #Include it and register it here.
@@ -72,8 +79,9 @@ BuildTray() {
 OnExit(SaveOnExit)
 
 SaveOnExit(*) {
-    global Cfg, Modules
-
+    global Cfg, Modules, ZoneContext
+    
     Modules.ShutdownAll()
+    ZoneContext.Stop()
     Cfg.Flush()
 }

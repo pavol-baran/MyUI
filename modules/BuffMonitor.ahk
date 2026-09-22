@@ -74,8 +74,17 @@ class BuffMonitorModule {
     }
 
     Tick() {
+        global ZoneContext
+
         if !this.active
             return
+
+        if !ZoneContext.isTrackingAllowed {
+            if this.IsPythonRunning()
+                this.StopPython()
+
+            return
+        }
 
         poeRunning := ProcessExist(this.gameExe) != 0
         pythonRunning := this.IsPythonRunning()
