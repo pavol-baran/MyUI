@@ -20,10 +20,11 @@ Persistent()
 #Include lib\ModuleManager.ahk
 #Include modules\BuffMonitor.ahk
 #Include modules\TempestBell.ahk
+#Include modules\ZoneDebugHud.ahk
 
 ; --- global singletons -------------------------------------
 global APP_NAME := "MyUI"
-global APP_VERSION := "0.1.0"
+global APP_VERSION := "0.2.0-beta.1"
 
 global Cfg := AppConfig(
     A_ScriptDir "\data\settings.ini"
@@ -44,6 +45,7 @@ ZoneContext.Start()
 
 Modules.Register(BuffMonitorModule())
 Modules.Register(TempestBellModule())
+Modules.Register(ZoneDebugHudModule())
 Modules.InitAll()
 
 ; --- tray --------------------------------------------------
@@ -59,7 +61,11 @@ Hotkey("^!q", (*) => ExitApp())
 if (Cfg.Get("General", "ShowOverlayOnStart", "1") = "1")
     Overlay.Show()
 
-Overlay.SetLine("status", APP_NAME " v" APP_VERSION " - F1 overlay | F2 settings")
+Overlay.SetLine(
+    "status",
+    APP_NAME " v" APP_VERSION
+    . " | F1 overlay | F2 settings"
+)
 
 TrayTip(APP_NAME " running", "F1 = overlay  F2 = settings  Ctrl+Alt+Q = quit")
 
@@ -80,7 +86,7 @@ OnExit(SaveOnExit)
 
 SaveOnExit(*) {
     global Cfg, Modules, ZoneContext
-    
+
     Modules.ShutdownAll()
     ZoneContext.Stop()
     Cfg.Flush()

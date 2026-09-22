@@ -55,7 +55,7 @@ class TempestBellModule {
     }
 
     CreateClone() {
-        global Cfg, CloneFrame
+        global Cfg
 
         if this.frame
             return

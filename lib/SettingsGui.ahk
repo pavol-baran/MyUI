@@ -19,8 +19,10 @@ class SettingsGui {
 
     static Build() {
         global Cfg, Overlay, Modules, APP_NAME, APP_VERSION
-        g := Gui("+Resize -MaximizeBox", APP_NAME " - Settings")
-        g.SetFont("s9", "Segoe UI")
+        g := Gui(
+            "+Resize -MaximizeBox",
+            APP_NAME " v" APP_VERSION " - Settings"
+        ) g.SetFont("s9", "Segoe UI")
         g.OnEvent("Close", (*) => g.Hide())
         g.OnEvent("Escape", (*) => g.Hide())
 

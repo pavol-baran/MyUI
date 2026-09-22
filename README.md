@@ -1,58 +1,25 @@
-# MyUI — step 1 skeleton
+# MyUI
 
-Bare AHK v2 app: starts, sits in tray, shows a transparent click-through
-overlay, and has an empty-but-working settings window. No features yet.
+Modular AutoHotkey v2 overlay and visual tracking toolkit for Path of Exile 2.
 
-## Requires
-AutoHotkey **v2.0** (2.0.28 or newer). Run `MyUI.ahk`.
+## Current beta features
 
-## Hotkeys
-| Key | Action |
-|---|---|
-| `F1` | Toggle overlay |
-| `F2` | Settings |
-| `Ctrl+Alt+R` | Reload |
-| `Ctrl+Alt+Q` | Exit |
+- Rend and Power Charge visual tracking
+- Configurable transparent Rend overlay
+- Fixed-region Tempest Bell charge cloning
+- Client.txt area detection
+- Automatic suspension in hideouts and hubs
+- Optional zone-context display
+- Persistent settings interface
+- Portable project-local Python environment
 
-## Layout
-```
-MyUI.ahk            entry point — include + register modules here
-lib/
-  AppConfig.ahk     INI wrapper, cached
-  Overlay.ahk       transparent click-through text overlay
-  SettingsGui.ahk   tabbed settings window
-  ModuleManager.ahk module lifecycle
-modules/
-  _Template.ahk     copy this to start a feature
-data/
-  settings.ini      auto-created on first run
-img/                templates/assets later
-```
+## Version
 
-## Adding a feature
-1. Copy `modules/_Template.ahk`, rename the class and `Name`.
-2. In `MyUI.ahk`: `#Include modules\Thing.ahk` then `Modules.Register(ThingModule())`
-   — both above the `Modules.InitAll()` line.
-3. It appears in **Settings → Modules** with an on/off toggle that persists.
+Current prerelease: `0.2.0-beta.1`
 
-## Notes on two fixed gotchas
-- The config class is `AppConfig`, **not** `Config`. `Config` collides with an
-  existing symbol in the VS Code AHK definitions and the language server
-  rejects the constructor call with *"Expected 0 parameters, but got 1"*.
-- `Integer(...)` is avoided throughout. The language server reports it as an
-  unassigned variable under `#Warn All`. Unary `+` (`val + 0`) coerces
-  strings to numbers instead — see `AppConfig.GetInt()`.
+## Requirements
 
-## Overlay notes
-- Click-through via `WS_EX_TRANSPARENT` (`+E0x20`) + layered (`+E0x80000`),
-  background keyed out with `WinSetTransColor`.
-- Uses a fixed pool of 12 text controls rather than rebuilding the GUI, so
-  frequent updates stay cheap. Raise `MAX_LINES` if you need more.
-- `-DPIScale` is set, so coordinates are literal pixels.
-- Call `Overlay.SetLine("id", "text")` / `Overlay.ClearLine("id")`. Each caller
-  owns its own id, so modules can't clobber each other.
-
-## Next steps
-- Attach overlay to a target window instead of screen coords.
-- Drag-to-position mode (temporarily drop `+E0x20` while dragging).
-- Python sidecar launch/teardown in `ModuleManager`.
+- Windows
+- AutoHotkey v2.0
+- Python 3.12
+- Project dependencies from `requirements.txt`
